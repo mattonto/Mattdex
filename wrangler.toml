@@ -1,0 +1,11 @@
+name = "llm-integration-service"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Queue consumer for the Dead Letter Queue
+[[queues.consumers]]
+queue = "dead-letter-queue"
+binding = "DEAD_LETTER_QUEUE"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 0 # DLQ should not retry messages, it's the final destination
