@@ -1,0 +1,54 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.testbin
+*.testlog
+*.prof
+*.testcover
+*.testcache
+/vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Sandbox directory
+sandbox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/bin/
+/dist/
+/tmp/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Coverage
+coverage.out
+coverage.html
