@@ -1,0 +1,19 @@
+name = "data-worker"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 database binding for SQLite-compatible storage
+[[d1_databases]]
+binding = "DB"
+database_name = "plan-management"
+database_id = "<d1-database-id>"
+
+# Logging
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Environment variables
+[vars]
+WORKER_NAME = "data-worker"

@@ -1,0 +1,23 @@
+name = "session-worker"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Service binding to data-worker for CRUD operations
+[[services]]
+binding = "DATA_WORKER"
+service = "data-worker"
+
+# Queue producer: emits 'session-approved' messages for Git commits
+[[queues.producers]]
+binding = "SESSION_APPROVED_QUEUE"
+queue = "session-approved"
+
+# Logging
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Environment variables
+[vars]
+WORKER_NAME = "session-worker"

@@ -1,0 +1,29 @@
+name = "git-worker"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Service binding to data-worker for CRUD operations
+[[services]]
+binding = "DATA_WORKER"
+service = "data-worker"
+
+# Queue consumer: receives 'session-approved' messages from session-worker
+[[queues.consumers]]
+queue = "session-approved"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "session-approved-dlq"
+
+# Logging
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Environment variables
+[vars]
+WORKER_NAME = "git-worker"
+GITHUB_API_TOKEN = "<github-token>"
+GITHUB_REPO_OWNER = "<repo-owner>"
+GITHUB_REPO_NAME = "<repo-name>"
