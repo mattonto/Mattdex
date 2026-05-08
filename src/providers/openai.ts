@@ -1,62 +1,125 @@
-import { ProviderInterface, LLMProviderRequest, LLMProviderResponse } from '@autoengineering/shared';
-import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { ProviderInterface, ProviderConfig, LLMRequest, LLMResponse, LLMError, LLMErrorCode } from './types';
 
-/**
- * OpenAIProvider implements the ProviderInterface using OpenAI models via the Vercel AI SDK.
- * It uses environment binding OPENAI_API_KEY automatically.
- */
+interface OpenAICompletionRequest {
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  max_tokens?: number;
+  temperature?: number;
+  stream?: boolean;
+}
+
+interface OpenAICompletionResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: { role: string; content: string };
+    finish_reason: string;
+  }>;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 export class OpenAIProvider implements ProviderInterface {
-  private readonly modelMapping: Record<string, string>;
+  private apiKey: string;
+  private baseUrl: string;
+  private defaultModel: string;
+  private fetchFn: typeof fetch;
 
-  constructor(env: { OPENAI_API_KEY: string }, modelMapping: Record<string, string>) {
-    if (!env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is required');
+  constructor(config: ProviderConfig & { fetchFn?: typeof fetch }) {
+    if (!config.apiKey) {
+      throw new LLMError(LLMErrorCode.AUTHENTICATION_ERROR, 'OpenAI API key is required');
     }
-    this.modelMapping = modelMapping;
+    this.apiKey = config.apiKey;
+    this.baseUrl = config.baseUrl ?? 'https://api.openai.com/v1';
+    this.defaultModel = config.defaultModel ?? 'gpt-4o';
+    this.fetchFn = config.fetchFn ?? globalThis.fetch;
   }
 
-  async generate(request: LLMProviderRequest): Promise<LLMProviderResponse> {
-    const modelId = this.modelMapping[request.model];
-    if (!modelId) {
-      throw new Error(`Model mapping not found for: ${request.model}`);
+  async generate(request: LLMRequest): Promise<LLMResponse> {
+    const body: OpenAICompletionRequest = {
+      model: request.model ?? this.defaultModel,
+      messages: request.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      max_tokens: request.maxTokens,
+      temperature: request.temperature,
+      stream: false,
+    };
+
+    const response = await this.fetchFn(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new LLMError(
+        LLMErrorCode.API_ERROR,
+        `OpenAI API error: ${response.status} ${response.statusText} - ${errorBody}`,
+      );
     }
 
-    const model = openai(modelId);
+    const data = (await response.json()) as OpenAICompletionResponse;
 
-    try {
-      const result = await generateText({
-        model,
-        system: request.systemPrompt,
-        prompt: request.prompt,
-        maxTokens: request.maxTokens,
-      });
-
-      return {
-        text: result.text,
-        usage: {
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens,
-        },
-        model: modelId,
-      };
-    } catch (error) {
-      throw this.handleError(error);
+    if (!data.choices || data.choices.length === 0) {
+      throw new LLMError(LLMErrorCode.EMPTY_RESPONSE, 'OpenAI returned no choices');
     }
+
+    return {
+      content: data.choices[0].message.content,
+      model: data.model,
+      usage: {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      },
+    };
   }
 
-  private handleError(error: unknown): Error {
-    if (error instanceof Error) {
-      if (error.message.includes('429')) {
-        return new Error('Rate limit exceeded');
-      }
-      if (error.message.includes('context_length') || error.message.includes('max_tokens')) {
-        return new Error('Request context too long');
-      }
-      if (error.message.includes('503') || error.message.includes('overloaded')) {
-        return new Error('Provider temporarily unavailable');
-      }
+  async generateStream(request: LLMRequest): Promise<ReadableStream<Uint8Array>> {
+    const body: OpenAICompletionRequest = {
+      model: request.model ?? this.defaultModel,
+      messages: request.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      max_tokens: request.maxTokens,
+      temperature: request.temperature,
+      stream: true,
+    };
+
+    const response = await this.fetchFn(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new LLMError(
+        LLMErrorCode.API_ERROR,
+        `OpenAI API error: ${response.status} ${response.statusText} - ${errorBody}`,
+      );
     }
-    return error instanceof Error ? error : new Error('Unknown error');
+
+    if (!response.body) {
+      throw new LLMError(LLMErrorCode.EMPTY_RESPONSE, 'OpenAI returned no response body for stream');
+    }
+
+    return response.body;
   }
 }
