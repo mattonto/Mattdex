@@ -1,61 +1,99 @@
--- src/db/schema.sql
--- Defines the PostgreSQL schema for storing indexed project context maps
+-- Context Index: stores indexed code context for the autoengineering system
+-- This schema satisfies R3 (context indexing), AC4 (symbol resolution), AC5 (dependency tracking)
 
+-- Enable UUID generation
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ============================================================
 -- Table: files
--- Stores metadata about each file in the project
+-- Represents a source file in a project that has been indexed
+-- ============================================================
 CREATE TABLE IF NOT EXISTS files (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  path TEXT NOT NULL UNIQUE,
-  language TEXT NOT NULL,
-  projectId UUID NOT NULL,
-  
-  -- Index on path for fast lookups by file path
-  CONSTRAINT idx_files_path UNIQUE (path),
-  
-  -- Index on projectId for fast project-scoped queries
-  CONSTRAINT idx_files_project_id FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    path        TEXT NOT NULL,
+    language    TEXT NOT NULL,
+    project_id  UUID NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- A file path must be unique within a project
+    UNIQUE (project_id, path)
 );
 
--- Index on language for filtering by language
-CREATE INDEX IF NOT EXISTS idx_files_language ON files(language);
+-- Index for fast lookup by project
+CREATE INDEX IF NOT EXISTS idx_files_project_id ON files (project_id);
 
+-- Index for path-based lookups within a project
+CREATE INDEX IF NOT EXISTS idx_files_project_path ON files (project_id, path);
+
+-- ============================================================
 -- Table: symbols
--- Stores symbols (functions, classes, imports, exports) extracted from each file
+-- Represents a named symbol (function, class, variable, type, etc.)
+-- extracted from a file during indexing.
+-- ============================================================
 CREATE TABLE IF NOT EXISTS symbols (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  type TEXT NOT NULL, -- e.g., 'function', 'class', 'import', 'export'
-  fileId UUID NOT NULL,
-  startLine INTEGER NOT NULL,
-  endLine INTEGER NOT NULL,
-  
-  -- Composite index for efficient lookups by name and fileId
-  CONSTRAINT idx_symbols_name_file_id UNIQUE (name, fileId),
-  
-  -- Foreign key constraint to ensure referential integrity
-  CONSTRAINT fk_symbols_file_id FOREIGN KEY (fileId) REFERENCES files(id) ON DELETE CASCADE
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL,  -- e.g. 'function', 'class', 'variable', 'interface', 'type', 'const'
+    file_id     UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    start_line  INTEGER NOT NULL,
+    end_line    INTEGER NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- A symbol name should be unique within a file (two symbols with same name in same file is ambiguous)
+    UNIQUE (file_id, name)
 );
 
--- Index on name for fast symbol name searches across files
-CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+-- Index for resolving symbols by name across a project (AC4)
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols (name);
 
+-- Index for finding all symbols in a file
+CREATE INDEX IF NOT EXISTS idx_symbols_file_id ON symbols (file_id);
+
+-- Index for finding symbols by type
+CREATE INDEX IF NOT EXISTS idx_symbols_type ON symbols (type);
+
+-- ============================================================
 -- Table: dependencies
--- Stores file-to-file dependencies (e.g., imports, requires)
+-- Represents a dependency (import, require, reference) from one
+-- file to another within the same project.
+-- ============================================================
 CREATE TABLE IF NOT EXISTS dependencies (
-  fromFileId UUID NOT NULL,
-  toFileId UUID NOT NULL,
-  type TEXT NOT NULL, -- e.g., 'import', 'require', 'include'
-  
-  -- Composite primary key to prevent duplicates
-  CONSTRAINT dependencies_pkey PRIMARY KEY (fromFileId, toFileId),
-  
-  -- Foreign key constraints for referential integrity
-  CONSTRAINT fk_dependencies_from_file_id FOREIGN KEY (fromFileId) REFERENCES files(id) ON DELETE CASCADE,
-  CONSTRAINT fk_dependencies_to_file_id FOREIGN KEY (toFileId) REFERENCES files(id) ON DELETE CASCADE
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    from_file_id    UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    to_file_id      UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    type            TEXT NOT NULL,  -- e.g. 'import', 'require', 'dynamic_import', 're-export'
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Prevent duplicate dependency records
+    UNIQUE (from_file_id, to_file_id, type),
+
+    -- A file should not depend on itself
+    CONSTRAINT chk_no_self_dependency CHECK (from_file_id <> to_file_id)
 );
 
--- Index on fromFileId for fast dependency lookups from a given file
-CREATE INDEX IF NOT EXISTS idx_dependencies_from_file_id ON dependencies(fromFileId);
+-- Index for finding all dependencies FROM a file (outgoing edges)
+CREATE INDEX IF NOT EXISTS idx_dependencies_from_file_id ON dependencies (from_file_id);
 
--- Index on toFileId for fast reverse lookups (who depends on this file)
-CREATE INDEX IF NOT EXISTS idx_dependencies_to_file_id ON dependencies(toFileId);
+-- Index for finding all dependents OF a file (incoming edges) (AC5)
+CREATE INDEX IF NOT EXISTS idx_dependencies_to_file_id ON dependencies (to_file_id);
+
+-- Index for dependency type queries
+CREATE INDEX IF NOT EXISTS idx_dependencies_type ON dependencies (type);
+
+-- ============================================================
+-- Helper: updated_at trigger for files table
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_files_updated_at ON files;
+CREATE TRIGGER trg_files_updated_at
+    BEFORE UPDATE ON files
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
