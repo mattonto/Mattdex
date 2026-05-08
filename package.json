@@ -1,0 +1,19 @@
+{
+  "name": "sandbox-db",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.9.0",
+    "drizzle-orm": "^0.33.0",
+    "neon": "^0.1.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}
