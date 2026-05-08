@@ -1,0 +1,120 @@
+# Autoengineering Plan Management System
+# Root wrangler.toml — defines both workers and all bindings
+#
+# Workers:
+#   - manager: API entry point, routes requests to supervisors
+#   - plan-supervisor: Plan management business logic (branching, checkpoints, diff, Git)
+#
+# Queues:
+#   - plan-git-queue: Async Git commit/push operations (avoids 30s Worker timeout)
+#   - plan-git-dlq: Dead-letter queue for failed Git operations
+#
+# D1 Database:
+#   - plan-db: Plan state, checkpoints, branches, sessions
+
+name = "autoengineering-plan-management"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ──────────────────────────────────────────────
+# Manager Worker
+# ──────────────────────────────────────────────
+[[workers]]
+name = "manager"
+main = "apps/manager/src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Service binding to Plan Supervisor
+[[workers.services]]
+binding = "PLAN_SUPERVISOR"
+service = "plan-supervisor"
+
+# D1 database binding for plan state
+[[workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db"
+database_id = "PLAN_DB_ID_PLACEHOLDER"
+
+# Queue producer for async Git operations
+[[workers.queues.producers]]
+binding = "GIT_QUEUE"
+queue = "plan-git-queue"
+
+# ──────────────────────────────────────────────
+# Plan Supervisor Worker
+# ──────────────────────────────────────────────
+[[workers]]
+name = "plan-supervisor"
+main = "apps/plan-supervisor/src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 database binding for plan state
+[[workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db"
+database_id = "PLAN_DB_ID_PLACEHOLDER"
+
+# Queue consumer for async Git operations
+[[workers.queues.consumers]]
+queue = "plan-git-queue"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "plan-git-dlq"
+
+# Queue producer for dead-letter retry (optional, for observability)
+[[workers.queues.producers]]
+binding = "GIT_DLQ"
+queue = "plan-git-dlq"
+
+# ──────────────────────────────────────────────
+# Queue Definitions
+# ──────────────────────────────────────────────
+[[queues]]
+name = "plan-git-queue"
+
+[[queues]]
+name = "plan-git-dlq"
+
+# ──────────────────────────────────────────────
+# D1 Database Definitions
+# ──────────────────────────────────────────────
+[[d1_databases]]
+name = "plan-db"
+database_name = "plan-db"
+database_id = "PLAN_DB_ID_PLACEHOLDER"
+
+# ──────────────────────────────────────────────
+# Environment-specific overrides (examples)
+# ──────────────────────────────────────────────
+[env.production]
+[[env.production.workers]]
+name = "manager"
+[[env.production.workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db-prod"
+database_id = "PLAN_DB_PROD_ID_PLACEHOLDER"
+
+[[env.production.workers]]
+name = "plan-supervisor"
+[[env.production.workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db-prod"
+database_id = "PLAN_DB_PROD_ID_PLACEHOLDER"
+
+[env.staging]
+[[env.staging.workers]]
+name = "manager"
+[[env.staging.workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db-staging"
+database_id = "PLAN_DB_STAGING_ID_PLACEHOLDER"
+
+[[env.staging.workers]]
+name = "plan-supervisor"
+[[env.staging.workers.d1_databases]]
+binding = "PLAN_DB"
+database_name = "plan-db-staging"
+database_id = "PLAN_DB_STAGING_ID_PLACEHOLDER"
