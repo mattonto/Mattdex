@@ -1,6 +1,6 @@
-name = "plan-supervisor"
+name = "autoengineering-plan-supervisor"
 main = "src/index.ts"
-compatibility_date = "2024-12-01"
+compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 
 # Environment variables
@@ -8,52 +8,34 @@ compatibility_flags = ["nodejs_compat"]
 DATABASE_URL = ""
 GIT_CONFIG = ""
 
-# Queue consumers (plan-supervisor processes plan tasks)
-[[queues.consumers]]
-queue = "plan-checkpoint-tasks"
-max_batch_size = 5
-max_batch_timeout = 10
-max_retries = 3
-dead_letter_queue = "plan-checkpoint-tasks-dlq"
+# Service binding to the manager (for callbacks/results)
+[[services]]
+binding = "MANAGER"
+service = "autoengineering-manager"
 
-[[queues.consumers]]
-queue = "plan-git-tasks"
-max_batch_size = 3
-max_batch_timeout = 15
-max_retries = 3
-dead_letter_queue = "plan-git-tasks-dlq"
-
-# Queue producers (plan-supervisor enqueues work for downstream workers)
-[[queues.producers]]
-binding = "CODE_GEN_QUEUE"
-queue = "code-gen-tasks"
-
-[[queues.producers]]
-binding = "VERIFICATION_QUEUE"
-queue = "verification-tasks"
-
-# KV namespace for checkpoint cache
-[[kv_namespaces]]
-binding = "CHECKPOINT_CACHE"
-id = ""
-
-# R2 bucket for plan artifacts
-[[r2_buckets]]
-binding = "PLAN_ARTIFACTS"
-bucket_name = "plan-artifacts"
-
-# D1 database for plan state (fallback / local dev)
+# D1 database binding for reading/writing state
 [[d1_databases]]
-binding = "PLAN_DB"
-database_name = "plan-db"
+binding = "DB"
+database_name = "autoengineering-state"
 database_id = ""
+
+# Queue bindings
+[[queues]]
+binding = "CODE_GEN_QUEUE"
+queue = "autoengineering-code-gen"
+
+[[queues]]
+binding = "VERIFICATION_QUEUE"
+queue = "autoengineering-verification"
+
+# R2 bucket for reading spec artifacts
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "autoengineering-artifacts"
 
 # Environment-specific overrides
 [env.production]
 vars = { DATABASE_URL = "", GIT_CONFIG = "" }
 
 [env.staging]
-vars = { DATABASE_URL = "", GIT_CONFIG = "" }
-
-[env.development]
 vars = { DATABASE_URL = "", GIT_CONFIG = "" }

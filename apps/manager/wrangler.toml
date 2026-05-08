@@ -1,6 +1,6 @@
-name = "manager"
+name = "autoengineering-manager"
 main = "src/index.ts"
-compatibility_date = "2024-12-01"
+compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 
 # Environment variables
@@ -10,48 +10,40 @@ GIT_CONFIG = ""
 
 # Service bindings to supervisor workers
 [[services]]
-binding = "SUPERVISOR_SPEC"
-service = "supervisor-spec"
+binding = "SPEC_SUPERVISOR"
+service = "autoengineering-spec-supervisor"
 
 [[services]]
-binding = "SUPERVISOR_PLAN"
-service = "plan-supervisor"
+binding = "PLAN_SUPERVISOR"
+service = "autoengineering-plan-supervisor"
 
 [[services]]
-binding = "SUPERVISOR_IMPLEMENTATION"
-service = "supervisor-implementation"
+binding = "IMPLEMENTATION_SUPERVISOR"
+service = "autoengineering-implementation-supervisor"
 
-# Queue producers (manager enqueues work for task workers)
-[[queues.producers]]
-binding = "CODE_GEN_QUEUE"
-queue = "code-gen-tasks"
-
-[[queues.producers]]
-binding = "VERIFICATION_QUEUE"
-queue = "verification-tasks"
-
-# KV namespace for session cache
-[[kv_namespaces]]
-binding = "SESSION_CACHE"
-id = ""
-
-# R2 bucket for plan artifacts
-[[r2_buckets]]
-binding = "PLAN_ARTIFACTS"
-bucket_name = "plan-artifacts"
-
-# D1 database for plan state (fallback / local dev)
+# D1 database binding (for session/state storage)
 [[d1_databases]]
-binding = "PLAN_DB"
-database_name = "plan-db"
+binding = "DB"
+database_name = "autoengineering-state"
 database_id = ""
+
+# Queue bindings for async task dispatch
+[[queues]]
+binding = "CODE_GEN_QUEUE"
+queue = "autoengineering-code-gen"
+
+[[queues]]
+binding = "VERIFICATION_QUEUE"
+queue = "autoengineering-verification"
+
+# R2 bucket for artifact storage
+[[r2_buckets]]
+binding = "ARTIFACTS"
+bucket_name = "autoengineering-artifacts"
 
 # Environment-specific overrides
 [env.production]
 vars = { DATABASE_URL = "", GIT_CONFIG = "" }
 
 [env.staging]
-vars = { DATABASE_URL = "", GIT_CONFIG = "" }
-
-[env.development]
 vars = { DATABASE_URL = "", GIT_CONFIG = "" }
