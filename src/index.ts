@@ -1,11 +1,19 @@
-import { Hono } from 'hono';
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
 
-const app = new Hono();
+    if (request.method === 'GET' && url.pathname === '/') {
+      return handleGreeting();
+    }
 
-app.get('/', (c) => {
-  return c.json({ greeting: 'hello world' }, 200, {
-    'Content-Type': 'application/json',
+    return new Response('Not Found', { status: 404 });
+  },
+};
+
+function handleGreeting(): Response {
+  const body = { greeting: 'hello world' };
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
   });
-});
-
-export default app;
+}
