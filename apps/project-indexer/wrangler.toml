@@ -1,0 +1,37 @@
+name = "project-indexer"
+
+main = "src/index.ts"
+
+compatibility_date = "2024-05-01"
+
+[[services]]
+  binding = "PG"
+  service = "neon-db"
+  environment = "production"
+
+[[queues.producers]]
+  binding = "INDEXING_JOBS"
+  queue = "indexing-jobs"
+
+[[queues.producers]]
+  binding = "FILE_PARSE_QUEUE"
+  queue = "file-parse-queue"
+
+[[queues.consumers]]
+  queue = "indexing-jobs"
+  max_batch_size = 10
+  max_batch_timeout = 5
+  max_retries = 3
+  dead_letter_queue = "indexing-jobs-dlq"
+
+[[queues.consumers]]
+  queue = "file-parse-queue"
+  max_batch_size = 5
+  max_batch_timeout = 10
+  max_retries = 5
+  dead_letter_queue = "file-parse-queue-dlq"
+
+[[d1_databases]]
+  binding = "D1"
+  database_name = "project-context-db"
+  database_id = "${D1_ID}"
