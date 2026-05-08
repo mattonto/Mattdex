@@ -1,37 +1,57 @@
 name = "project-indexer"
-
 main = "src/index.ts"
+compatibility_date = "2024-12-18"
+compatibility_flags = ["nodejs_compat"]
 
-compatibility_date = "2024-05-01"
-
-[[services]]
-  binding = "PG"
-  service = "neon-db"
-  environment = "production"
-
-[[queues.producers]]
-  binding = "INDEXING_JOBS"
-  queue = "indexing-jobs"
-
-[[queues.producers]]
-  binding = "FILE_PARSE_QUEUE"
-  queue = "file-parse-queue"
-
-[[queues.consumers]]
-  queue = "indexing-jobs"
-  max_batch_size = 10
-  max_batch_timeout = 5
-  max_retries = 3
-  dead_letter_queue = "indexing-jobs-dlq"
-
-[[queues.consumers]]
-  queue = "file-parse-queue"
-  max_batch_size = 5
-  max_batch_timeout = 10
-  max_retries = 5
-  dead_letter_queue = "file-parse-queue-dlq"
-
+# ============================================================
+# Neon PostgreSQL Database (PG)
+# ============================================================
 [[d1_databases]]
-  binding = "D1"
-  database_name = "project-context-db"
-  database_id = "${D1_ID}"
+binding = "PG"
+database_name = "project-indexer-db"
+database_id = "project-indexer-db-id"
+
+# ============================================================
+# Cloudflare Queues
+# ============================================================
+
+# Queue: indexing-jobs
+# Priority: P3 — standard indexing tasks, retry up to 3 times with backoff
+[[queues.producers]]
+queue = "indexing-jobs"
+binding = "INDEXING_JOBS"
+
+[[queues.consumers]]
+queue = "indexing-jobs"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+max_backoff_seconds = 60
+dead_letter_queue = "indexing-jobs-dlq"
+
+# Queue: file-parse-queue
+# Priority: P4 — lower priority file parsing, retry up to 5 times with longer backoff
+[[queues.producers]]
+queue = "file-parse-queue"
+binding = "FILE_PARSE_QUEUE"
+
+[[queues.consumers]]
+queue = "file-parse-queue"
+max_batch_size = 5
+max_batch_timeout = 60
+max_retries = 5
+max_backoff_seconds = 120
+dead_letter_queue = "file-parse-queue-dlq"
+
+# ============================================================
+# Environment Variables
+# ============================================================
+[vars]
+ENVIRONMENT = "production"
+
+# ============================================================
+# Logging & Observability
+# ============================================================
+[observability]
+enabled = true
+head_sampling_rate = 0.1
