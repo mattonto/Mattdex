@@ -1,31 +1,59 @@
-// --------------------------------------------------------------------------
-// Shared types for the LLM Orchestrator Worker.
-// --------------------------------------------------------------------------
+// Shared types for the Worker configuration module.
+// These types are consumed by src/config.ts and any code that reads config.
 
-/** Supported LLM providers. */
-export type ProviderName =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'mistral'
-  | 'perplexity';
+// ---------------------------------------------------------------------------
+// Model provider identifiers
+// ---------------------------------------------------------------------------
+export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'deepseek';
 
-/** Roles a model can serve. */
-export type Role =
+// ---------------------------------------------------------------------------
+// Model role identifiers
+// ---------------------------------------------------------------------------
+export type ModelRole =
+  | 'primary_generation'
+  | 'fast_generation'
   | 'reasoning'
-  | 'planning'
-  | 'code_generation'
-  | 'analysis'
-  | 'research';
+  | 'classification';
 
-/** A fully-qualified model identifier (e.g. "openai:gpt-4o"). */
-export type ModelId = `${ProviderName}:${string}`;
+// ---------------------------------------------------------------------------
+// Fallback chain per provider
+// ---------------------------------------------------------------------------
+export interface ProviderFallbackChain {
+  readonly provider: ModelProvider;
+  /** Ordered list of model IDs — first is primary, rest are fallbacks. */
+  readonly fallbacks: readonly string[];
+}
 
-/** Scoring dimensions used to rank candidate models. */
-export interface ModelScore {
-  modelId: ModelId;
-  costScore: number;      // 0-1, lower is cheaper
-  latencyScore: number;   // 0-1, lower is faster
-  capabilityScore: number; // 0-1, higher is better fit
-  combinedScore: number;  // Weighted sum of the above
+// ---------------------------------------------------------------------------
+// Scoring weights for model selection
+// ---------------------------------------------------------------------------
+export interface ScoringWeights {
+  /** Weight for per-token cost (0–1). */
+  readonly cost: number;
+  /** Weight for response latency (0–1). */
+  readonly latency: number;
+  /** Weight for output quality score (0–1). */
+  readonly quality: number;
+  /** Weight for provider availability (0–1). */
+  readonly availability: number;
+}
+
+// ---------------------------------------------------------------------------
+// Queue configuration
+// ---------------------------------------------------------------------------
+export interface QueueConfig {
+  /** Name of the Cloudflare Queue. */
+  readonly queueName: string;
+  /** Maximum number of retry attempts. */
+  readonly maxRetries: number;
+  /** Delay in seconds between retries. */
+  readonly retryDelaySeconds: number;
+}
+
+// ---------------------------------------------------------------------------
+// Context cache configuration
+// ---------------------------------------------------------------------------
+export interface ContextCacheConfig {
+  /** TTL in seconds for cached context entries. */
+  readonly ttlSeconds: number;
 }

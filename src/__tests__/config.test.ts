@@ -1,122 +1,119 @@
-// --------------------------------------------------------------------------
-// Unit tests for src/config.ts
-// --------------------------------------------------------------------------
-
 import { describe, it, expect } from 'vitest';
 import {
   MODEL_ROLE_MAP,
-  FALLBACK_CHAINS,
-  COST_WEIGHT,
-  LATENCY_WEIGHT,
-  CAPABILITY_WEIGHT,
+  PROVIDER_FALLBACK_CHAINS,
+  SCORING_WEIGHTS,
   CONTEXT_CACHE_TTL_SECONDS,
-  FALLBACK_QUEUE_NAME,
-  ALL_MODEL_IDS,
-  ALL_PROVIDERS,
-  getFallbackChain,
-  getRolesForModel,
+  QUEUE_CONFIG,
 } from '../config';
 
 describe('config', () => {
-  // ------------------------------------------------------------------------
-  // AC: All configuration values are present and typed
-  // ------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // MODEL_ROLE_MAP
+  // -----------------------------------------------------------------------
+  describe('MODEL_ROLE_MAP', () => {
+    it('maps known model IDs to valid roles', () => {
+      const entries = Object.entries(MODEL_ROLE_MAP);
+      expect(entries.length).toBeGreaterThan(0);
 
-  it('should export MODEL_ROLE_MAP as a non-empty object', () => {
-    expect(MODEL_ROLE_MAP).toBeDefined();
-    expect(typeof MODEL_ROLE_MAP).toBe('object');
-    expect(Object.keys(MODEL_ROLE_MAP).length).toBeGreaterThan(0);
-  });
+      const validRoles = ['primary_generation', 'fast_generation', 'reasoning', 'classification'];
+      for (const [, role] of entries) {
+        expect(validRoles).toContain(role);
+      }
+    });
 
-  it('should export FALLBACK_CHAINS as a non-empty object', () => {
-    expect(FALLBACK_CHAINS).toBeDefined();
-    expect(typeof FALLBACK_CHAINS).toBe('object');
-    expect(Object.keys(FALLBACK_CHAINS).length).toBeGreaterThan(0);
-  });
+    it('includes at least one model per role', () => {
+      const roles = new Set(Object.values(MODEL_ROLE_MAP));
+      expect(roles.has('primary_generation')).toBe(true);
+      expect(roles.has('fast_generation')).toBe(true);
+      expect(roles.has('reasoning')).toBe(true);
+      expect(roles.has('classification')).toBe(true);
+    });
 
-  it('should export numeric weights that sum to 1.0', () => {
-    const sum = COST_WEIGHT + LATENCY_WEIGHT + CAPABILITY_WEIGHT;
-    expect(sum).toBeCloseTo(1.0, 5);
-  });
-
-  it('should export CONTEXT_CACHE_TTL_SECONDS as a positive integer', () => {
-    expect(Number.isInteger(CONTEXT_CACHE_TTL_SECONDS)).toBe(true);
-    expect(CONTEXT_CACHE_TTL_SECONDS).toBeGreaterThan(0);
-  });
-
-  it('should export FALLBACK_QUEUE_NAME as a non-empty string', () => {
-    expect(typeof FALLBACK_QUEUE_NAME).toBe('string');
-    expect(FALLBACK_QUEUE_NAME.length).toBeGreaterThan(0);
-  });
-
-  // ------------------------------------------------------------------------
-  // AC: Route map includes at least one fallback chain
-  // ------------------------------------------------------------------------
-
-  it('should have at least one fallback chain with >= 2 entries', () => {
-    const chains = Object.values(FALLBACK_CHAINS);
-    const hasMultiEntryChain = chains.some((chain) => chain.length >= 2);
-    expect(hasMultiEntryChain).toBe(true);
-  });
-
-  // ------------------------------------------------------------------------
-  // Derived helpers
-  // ------------------------------------------------------------------------
-
-  describe('ALL_MODEL_IDS', () => {
-    it('should contain every key from MODEL_ROLE_MAP', () => {
-      expect(ALL_MODEL_IDS.sort()).toEqual(
-        Object.keys(MODEL_ROLE_MAP).sort(),
-      );
+    it('is frozen (immutable)', () => {
+      expect(() => {
+        (MODEL_ROLE_MAP as Record<string, string>)['new-model'] = 'primary_generation';
+      }).toThrow();
     });
   });
 
-  describe('ALL_PROVIDERS', () => {
-    it('should contain every key from FALLBACK_CHAINS', () => {
-      expect(ALL_PROVIDERS.sort()).toEqual(
-        Object.keys(FALLBACK_CHAINS).sort(),
-      );
+  // -----------------------------------------------------------------------
+  // PROVIDER_FALLBACK_CHAINS
+  // -----------------------------------------------------------------------
+  describe('PROVIDER_FALLBACK_CHAINS', () => {
+    it('defines a fallback chain for every known provider', () => {
+      const providers = ['openai', 'anthropic', 'google', 'deepseek'];
+      for (const p of providers) {
+        expect(PROVIDER_FALLBACK_CHAINS[p]).toBeDefined();
+        expect(PROVIDER_FALLBACK_CHAINS[p].fallbacks.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('has the primary model as the first fallback entry', () => {
+      // For openai, the first fallback should be 'gpt-4o'
+      expect(PROVIDER_FALLBACK_CHAINS.openai.fallbacks[0]).toBe('gpt-4o');
+      expect(PROVIDER_FALLBACK_CHAINS.anthropic.fallbacks[0]).toBe('claude-sonnet-4-20250514');
+      expect(PROVIDER_FALLBACK_CHAINS.google.fallbacks[0]).toBe('gemini-2.5-pro');
+      expect(PROVIDER_FALLBACK_CHAINS.deepseek.fallbacks[0]).toBe('deepseek-reasoner');
+    });
+
+    it('is frozen (immutable)', () => {
+      expect(() => {
+        (PROVIDER_FALLBACK_CHAINS as Record<string, unknown>)['new-provider'] = { provider: 'new', fallbacks: [] };
+      }).toThrow();
     });
   });
 
-  describe('getFallbackChain', () => {
-    it('should return the correct chain for a known model', () => {
-      const chain = getFallbackChain('openai:gpt-4o');
-      expect(chain).toEqual(['openai:gpt-4o', 'openai:gpt-4o-mini']);
+  // -----------------------------------------------------------------------
+  // SCORING_WEIGHTS
+  // -----------------------------------------------------------------------
+  describe('SCORING_WEIGHTS', () => {
+    it('has all four weight fields defined', () => {
+      expect(SCORING_WEIGHTS.cost).toBeTypeOf('number');
+      expect(SCORING_WEIGHTS.latency).toBeTypeOf('number');
+      expect(SCORING_WEIGHTS.quality).toBeTypeOf('number');
+      expect(SCORING_WEIGHTS.availability).toBeTypeOf('number');
     });
 
-    it('should return an empty array for an unknown model', () => {
-      const chain = getFallbackChain('unknown:model');
-      expect(chain).toEqual([]);
+    it('weights sum to 1.0', () => {
+      const sum = SCORING_WEIGHTS.cost + SCORING_WEIGHTS.latency + SCORING_WEIGHTS.quality + SCORING_WEIGHTS.availability;
+      expect(sum).toBeCloseTo(1.0, 5);
     });
 
-    it('should return an empty array for a model with no provider chain', () => {
-      // If a model ID has a prefix not in FALLBACK_CHAINS
-      const chain = getFallbackChain('nonexistent:foo');
-      expect(chain).toEqual([]);
-    });
-  });
-
-  describe('getRolesForModel', () => {
-    it('should return roles for a known model', () => {
-      const roles = getRolesForModel('openai:gpt-4o');
-      expect(roles).toContain('reasoning');
-      expect(roles).toContain('code_generation');
-    });
-
-    it('should return an empty array for an unknown model', () => {
-      const roles = getRolesForModel('unknown:model');
-      expect(roles).toEqual([]);
+    it('is frozen (immutable)', () => {
+      expect(() => {
+        (SCORING_WEIGHTS as Record<string, number>).cost = 0.5;
+      }).toThrow();
     });
   });
 
-  // ------------------------------------------------------------------------
-  // CI check: importing the config does not throw
-  // ------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // CONTEXT_CACHE_TTL_SECONDS
+  // -----------------------------------------------------------------------
+  describe('CONTEXT_CACHE_TTL_SECONDS', () => {
+    it('is a positive integer', () => {
+      expect(CONTEXT_CACHE_TTL_SECONDS).toBeGreaterThan(0);
+      expect(Number.isInteger(CONTEXT_CACHE_TTL_SECONDS)).toBe(true);
+    });
+  });
 
-  it('should be importable without throwing', () => {
-    // This test itself verifies the import succeeded (no throw at module
-    // evaluation time).  We re-assert the module is an object.
-    expect(typeof require !== 'undefined' ? require('../config') : {}).toBeDefined();
+  // -----------------------------------------------------------------------
+  // QUEUE_CONFIG
+  // -----------------------------------------------------------------------
+  describe('QUEUE_CONFIG', () => {
+    it('has a non-empty queue name', () => {
+      expect(QUEUE_CONFIG.queueName.length).toBeGreaterThan(0);
+    });
+
+    it('has positive retry settings', () => {
+      expect(QUEUE_CONFIG.maxRetries).toBeGreaterThan(0);
+      expect(QUEUE_CONFIG.retryDelaySeconds).toBeGreaterThan(0);
+    });
+
+    it('is frozen (immutable)', () => {
+      expect(() => {
+        (QUEUE_CONFIG as Record<string, unknown>).queueName = 'hacked';
+      }).toThrow();
+    });
   });
 });

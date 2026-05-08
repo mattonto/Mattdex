@@ -1,121 +1,82 @@
-// --------------------------------------------------------------------------
-// Configuration constants for the LLM Orchestrator Worker.
-//
-// All values are typed and exported as `const` bindings.  No external config
-// file is used – this module is the single source of truth for routing,
-// fallback, cost/latency scoring, caching TTL, and queue names.
-// --------------------------------------------------------------------------
+// Configuration constants for the Worker
+// All values are typed constants — no external config file needed.
 
-import type { ModelProvider, Role } from './types'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import type { ModelProvider, ModelRole, ProviderFallbackChain, ScoringWeights, ContextCacheConfig, QueueConfig } from './types';
 
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Model → Role routing map
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Maps each model ID to its primary role in the system.
+// A model may serve multiple roles; the first match wins at routing time.
 
-/**
- * Each entry maps a provider+model identifier to the roles it can serve.
- * The first entry in the array is the **primary** model for that role;
- * subsequent entries form the fallback chain.
- */
-export const MODEL_ROLE_MAP: Record<string, Role[]> = {
-  'openai:gpt-4o':          ['reasoning', 'planning', 'code_generation', 'analysis'],
-  'openai:gpt-4o-mini':     ['reasoning', 'code_generation', 'analysis'],
-  'anthropic:claude-3-opus': ['reasoning', 'planning', 'analysis'],
-  'anthropic:claude-3-sonnet': ['reasoning', 'code_generation', 'analysis'],
-  'google:gemini-1.5-pro':  ['reasoning', 'planning', 'analysis'],
-  'google:gemini-1.5-flash': ['code_generation', 'analysis'],
-  'mistral:mistral-large':  ['reasoning', 'code_generation'],
-  'mistral:mistral-small':  ['code_generation'],
-  'perplexity:sonar-pro':   ['research', 'analysis'],
-  'perplexity:sonar':       ['research'],
+export const MODEL_ROLE_MAP: Readonly<Record<string, ModelRole>> = {
+  'gpt-4o':               'primary_generation',
+  'gpt-4o-mini':          'fast_generation',
+  'claude-sonnet-4-20250514': 'primary_generation',
+  'claude-haiku-3-5-sonnet-20241022': 'fast_generation',
+  'gemini-2.0-flash':     'fast_generation',
+  'gemini-2.5-pro':       'primary_generation',
+  'o1':                   'reasoning',
+  'o3-mini':              'reasoning',
+  'deepseek-chat':        'classification',
+  'deepseek-reasoner':    'reasoning',
 } as const;
 
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Fallback chain per provider
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Ordered list of model IDs to try when the primary model fails or is
+// rate-limited.  The first entry is the primary; subsequent entries are
+// fallbacks in priority order.
 
-/**
- * Ordered fallback chains keyed by provider name.
- * When the primary model for a provider fails, the worker tries each
- * subsequent entry in the array before giving up.
- */
-export const FALLBACK_CHAINS: Record<string, string[]> = {
-  openai:    ['openai:gpt-4o', 'openai:gpt-4o-mini'],
-  anthropic: ['anthropic:claude-3-opus', 'anthropic:claude-3-sonnet'],
-  google:    ['google:gemini-1.5-pro', 'google:gemini-1.5-flash'],
-  mistral:   ['mistral:mistral-large', 'mistral:mistral-small'],
-  perplexity: ['perplexity:sonar-pro', 'perplexity:sonar'],
+export const PROVIDER_FALLBACK_CHAINS: Readonly<Record<ModelProvider, ProviderFallbackChain>> = {
+  openai: {
+    provider: 'openai',
+    fallbacks: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini'],
+  },
+  anthropic: {
+    provider: 'anthropic',
+    fallbacks: ['claude-sonnet-4-20250514', 'claude-haiku-3-5-sonnet-20241022'],
+  },
+  google: {
+    provider: 'google',
+    fallbacks: ['gemini-2.5-pro', 'gemini-2.0-flash'],
+  },
+  deepseek: {
+    provider: 'deepseek',
+    fallbacks: ['deepseek-reasoner', 'deepseek-chat'],
+  },
 } as const;
 
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Cost & latency weights for scoring
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Used by the model router to compute a composite score for each candidate
+// model.  Higher weight = more influence on the final score.
 
-/**
- * Relative weight given to **cost** when scoring candidate models.
- * 0 = ignore cost entirely, 1 = cost is the only factor.
- */
-export const COST_WEIGHT = 0.4 as const;
+export const SCORING_WEIGHTS: Readonly<ScoringWeights> = {
+  cost:       0.35,
+  latency:    0.25,
+  quality:    0.30,
+  availability: 0.10,
+} as const;
 
-/**
- * Relative weight given to **latency** when scoring candidate models.
- * 0 = ignore latency entirely, 1 = latency is the only factor.
- */
-export const LATENCY_WEIGHT = 0.3 as const;
+// ---------------------------------------------------------------------------
+// Context caching TTL (seconds)
+// ---------------------------------------------------------------------------
+// How long a cached context entry lives before being evicted.
+// Set to 300 seconds (5 minutes) as a reasonable default for LLM context
+// windows that may span multiple turns.
 
-/**
- * Relative weight given to **capability** (role fit) when scoring.
- * 0 = ignore capability, 1 = capability is the only factor.
- *
- * The three weights should sum to 1.0 for a well-calibrated score.
- */
-export const CAPABILITY_WEIGHT = 0.3 as const;
+export const CONTEXT_CACHE_TTL_SECONDS: number = 300;
 
-// --------------------------------------------------------------------------
-// Context caching TTL
-// --------------------------------------------------------------------------
-
-/**
- * Time-to-live (in seconds) for cached context entries in KV.
- * After this period the cached response is considered stale and will be
- * re-fetched from the provider.
- */
-export const CONTEXT_CACHE_TTL_SECONDS = 300 as const; // 5 minutes
-
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Queue name
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Name of the Cloudflare Queue used for async code-generation tasks.
 
-/**
- * Cloudflare Queue name used for asynchronous fallback processing.
- * When a synchronous fallback chain times out, the request is enqueued
- * here for out-of-band completion.
- */
-export const FALLBACK_QUEUE_NAME = 'llm-fallback-queue' as const;
-
-// --------------------------------------------------------------------------
-// Derived helpers
-// --------------------------------------------------------------------------
-
-/** All known model identifiers (e.g. "openai:gpt-4o"). */
-export const ALL_MODEL_IDS: readonly string[] = Object.keys(MODEL_ROLE_MAP);
-
-/** All known provider names (e.g. "openai"). */
-export const ALL_PROVIDERS: readonly string[] = Object.keys(FALLBACK_CHAINS);
-
-/**
- * Return the fallback chain for a given model ID by extracting its provider
- * prefix.  Returns an empty array when no chain is found.
- */
-export function getFallbackChain(modelId: string): readonly string[] {
-  const provider = modelId.split(':')[0];
-  return FALLBACK_CHAINS[provider] ?? [];
-}
-
-/**
- * Return the roles a model can serve.  Returns an empty array when the
- * model ID is unknown.
- */
-export function getRolesForModel(modelId: string): readonly Role[] {
-  return MODEL_ROLE_MAP[modelId] ?? [];
-}
+export const QUEUE_CONFIG: Readonly<QueueConfig> = {
+  queueName: 'code-gen-tasks',
+  maxRetries: 3,
+  retryDelaySeconds: 10,
+} as const;
