@@ -1,0 +1,16 @@
+name = "llm-router"
+main = "src/index.ts"
+compatibility_date = "2023-10-17"
+
+[[d1_databases]]
+binding = "LLM_CACHE"
+database_name = "LLM_CACHE"
+database_id = "<your-database-id>"
+
+[[queues.producers]]
+binding = "CACHE_INVALIDATION"
+queue = "CACHE_INVALIDATION"
+
+[[services]]
+binding = "ROUTER_DO"
+service = "router-do"
