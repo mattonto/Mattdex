@@ -1,0 +1,10 @@
+{
+  "name": "llm-gateway",
+  "private": true,
+  "scripts": {
+    "dev": "cd apps/gateway && npm run dev",
+    "build": "cd apps/gateway && npm run build",
+    "test": "cd apps/gateway && npm run test"
+  },
+  "devDependencies": {}
+}

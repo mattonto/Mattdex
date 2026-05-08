@@ -1,0 +1,21 @@
+{
+  "name": "gateway",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler publish --dry-run",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "openai": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.10.0",
+    "@google/generative-ai": "^0.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "wrangler": "^3.0.0",
+    "vitest": "^1.0.0"
+  }
+}
