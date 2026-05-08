@@ -1,0 +1,12 @@
+[name]
+name = "lafl-worker"
+
+[[queues.producers]]
+binding = "IMPLEMENTATION_SUPERVISOR"
+queue = "llm-routing-queue"
+
+[vars]
+# No runtime variables needed for minimal scaffold
+
+[[migrations]]
+# No D1 migrations needed for this worker

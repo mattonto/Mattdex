@@ -1,0 +1,42 @@
+{
+  "name": "lafl-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Language-Aware File Loader (LAFL) Worker for Autoengineering system",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "cloudflare-workers": "*",
+    "tree-sitter": "^0.20.0",
+    "@tree-sitter-grammars/typescript": "^0.20.0",
+    "@tree-sitter-grammars/javascript": "^0.20.0",
+    "@tree-sitter-grammars/python": "^0.20.0",
+    "@tree-sitter-grammars/rust": "^0.20.0",
+    "@tree-sitter-grammars/c": "^0.20.0",
+    "@tree-sitter-grammars/cpp": "^0.20.0",
+    "@tree-sitter-grammars/go": "^0.20.0",
+    "@tree-sitter-grammars/ruby": "^0.20.0",
+    "@tree-sitter-grammars/java": "^0.20.0",
+    "@tree-sitter-grammars/html": "^0.20.0",
+    "@tree-sitter-grammars/css": "^0.20.0",
+    "@tree-sitter-grammars/bash": "^0.20.0",
+    "@tree-sitter-grammars/php": "^0.20.0",
+    "@tree-sitter-grammars/swift": "^0.20.0",
+    "@tree-sitter-grammars/kotlin": "^0.20.0",
+    "@tree-sitter-grammars/scala": "^0.20.0",
+    "@tree-sitter-grammars/lua": "^0.20.0",
+    "@tree-sitter-grammars/haskell": "^0.20.0",
+    "@tree-sitter-grammars/elixir": "^0.20.0",
+    "@tree-sitter-grammars/clojure": "^0.20.0",
+    "openai": "^4.0.0",
+    "vitest": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
